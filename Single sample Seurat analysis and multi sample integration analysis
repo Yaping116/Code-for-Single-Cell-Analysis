@@ -1,0 +1,260 @@
+library(dplyr)
+library(Seurat)
+library(ggplot2)
+library(patchwork)
+
+#1. Setup the Seurat Object
+# Load the dataset data.dir The following path is modified to your computer's path according to your needs
+pbmc3k <- Read10X(data.dir = "D:\\datadir\\pbmc3k_filtered_gene_bc_matric
+es\\filtered_gene_bc_matrices\\hg19")
+# pbmc3k <- readRDS("pbmc3k.rds")
+# Initialize the Seurat object with the raw (non-normalized data).
+pbmc <- CreateSeuratObject(counts = pbmc3k, project = "pbmc3k", min.cell
+s = 3, min.features = 200)
+pbmc
+
+#2. QC and selecting cells for further analysis
+# The [[ operator can add columns to object metadata. This is a great pla
+ce to stash QC stats
+pbmc[ ["percent.mt"]] <- PercentageFeatureSet(pbmc, pattern = "^MT-")
+#pbmc[ ["percent.mito"]]<-PercentageFeatureSet(pbmc,features=mito.genes)
+# Visualize QC metrics as a violin plot
+VlnPlot(pbmc, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), n
+col = 3)
+pbmc <- subset(pbmc, subset = nFeature_RNA > 200 & nFeature_RNA < 2000 &
+percent.mt < 5)
+
+
+#3. Normalizing the data
+pbmc <- NormalizeData(pbmc, normalization.method = "LogNormalize", scale.
+factor = 10000)
+
+
+#4. Identification of highly variable features (feature selection)
+pbmc <- FindVariableFeatures(pbmc, selection.method = "vst", nfeatures =
+2000)
+# Identify the 10 most highly variable genes
+top10 <- head(VariableFeatures(pbmc), 10)
+
+plot1 <- VariableFeaturePlot(pbmc)
+plot2 <- LabelPoints(plot = plot1, points = top10, repel = TRUE)
+#plot1 + plot2
+
+#5. Scaling the data
+
+
+
+
+
+
+pbmc <- ScaleData(pbmc)
+
+#6. Perform linear dimensional reduction
+pbmc <- RunPCA(pbmc, features = VariableFeatures(object = pbmc))
+# Examine and visualize PCA results a few different ways
+print(pbmc[ ["pca"]], dims = 1:5)
+DimPlot(pbmc, reduction = "pca")
+DimHeatmap(pbmc, dims = 1, cells = 500, balanced = TRUE)
+DimHeatmap(pbmc, dims = 1:12, cells = 500, balanced = TRUE)
+
+#7. Determine the ‘dimensionality’ of the dataset
+# Elbow plot: a ranking of principle components based on the percentage o
+f variance explained by each one (ElbowPlot() function). In this exampl
+e, we can observe an ‘elbow’ around PC9-10, suggesting that the majority
+of true signal is captured in the first 10 PCs.
+ElbowPlot(pbmc)
+
+#8. Cluster the cells
+pbmc <- FindNeighbors(pbmc, dims = 1:20)
+pbmc <- FindClusters(pbmc, resolution = 0.6)
+
+#9 Run non-linear dimensional reduction (UMAP/tSNE)
+pbmc <- RunUMAP(pbmc , dims = 1:20)
+DimPlot(pbmc, reduction = "umap", label=T)
+
+pbmc1 <- pbmc
+pbmc1 <- RunUMAP(pbmc1 , dims = 1:20,min.dist=1.0)
+DimPlot(pbmc1, reduction = "umap", label=T)
+
+pbmc <- RunTSNE(pbmc, dims = 1:20)
+DimPlot(pbmc, reduction = "tsne", label=T)
+saveRDS(pbmc, file = "pbmc3k.rds")
+
+#10. Finding differentially expressed features (cluster biomarkers)
+# find all markers of cluster 2
+cluster2.markers <- FindMarkers(pbmc, ident.1 = 2, min.pct = 0.25, logfc.
+threshold = 0, only.pos = FALSE)
+head(cluster2.markers, n = 5)
+# find all markers distinguishing cluster 5 from clusters 0 and 3
+cluster5.markers <- FindMarkers(pbmc, ident.1 = 5, ident.2 = c(0, 3), mi
+n.pct = 0.25)
+head(cluster5.markers, n = 5)
+# find markers for every cluster compared to all remaining cells, report
+only the positive ones
+pbmc.markers <- FindAllMarkers(pbmc, only.pos = TRUE, min.pct = 0.25, log
+fc.threshold = 0.25)
+pbmc.markers %>% group_by(cluster) %>% slice_max(n = 2, order_by = avg_lo
+g2FC)
+
+
+
+
+
+
+
+VlnPlot(pbmc, features = c("CD3D", "MS4A1"))
+FeaturePlot(pbmc, features = c("PTPRC","CD3D", "MS4A1", "LYZ", "PPBP", "G
+NLY"))
+top5 <- pbmc.markers %>% group_by(cluster) %>% top_n(n = 5, wt = avg_log2 FC)
+pbmc<-ScaleData(pbmc, features = top5$gene)
+DoHeatmap(pbmc, features = top5$gene)
+
+#11. Assigning cell type identity to clusters
+new.cluster.ids <- c("T cell", "T cell", "Myeloid", "B cell", "T cell",
+"Myeloid", "NK cell", "Myeloid", "Platelet")
+names(new.cluster.ids) <- levels(pbmc)
+pbmc <- RenameIdents(pbmc, new.cluster.ids)
+DimPlot(pbmc, reduction = "umap", label = TRUE, pt.size = 0.5)
+
+
+#integrated   Diversified data integration analysis
+#1.Prepare data
+pbmc1k <- Read10X(data.dir = "D:\\datadir\\pbmc_1k_v3_filtered_feature_bc
+_matrix\\filtered_feature_bc_matrix")
+pbmc <- CreateSeuratObject(counts = pbmc1k, project = "pbmc1k", min.cell
+s = 3, min.features = 200)
+pbmc[ ["percent.mt"]] <- PercentageFeatureSet(pbmc, pattern = "^MT-")
+VlnPlot(pbmc, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), n col = 3)
+pbmc <- subset(pbmc, subset = nFeature_RNA > 200 & nFeature_RNA < 4000 &
+percent.mt < 20)
+saveRDS(pbmc, file = "pbmc1k.rds")
+
+
+pbmc3k <- Read10X(data.dir ="D:\\datadir\\pbmc3k_filtered_gene_bc_matrice
+s\\filtered_gene_bc_matrices\\hg19")
+pbmc <- CreateSeuratObject(counts = pbmc3k, project = "pbmc3k", min.cell
+s = 3, min.features = 200)
+pbmc[ ["percent.mt"]] <- PercentageFeatureSet(pbmc, pattern = "^MT-")
+pbmc <- subset(pbmc, subset = nFeature_RNA > 200 & nFeature_RNA < 2000 & percent.mt < 5)
+saveRDS(pbmc, file = "pbmc3k.rds")
+
+#2. Creat seurat object
+# From QC.rds of every sample
+library(stringr)          #Process and manipulate strings
+ob.list <- list()
+compare <- "pbmc3k,pbmc1k"
+samples <- strsplit(compare, ',')[ [1]] numsap = 1
+for (each in samples){
+
+
+
+
+
+
+pbmc <- readRDS(paste0(each, '.rds'))
+colnames(pbmc@assays$RNA@counts) <- str_replace_all(colnames(pbmc@assay
+s$RNA@counts), '-1', paste0('-',numsap))
+ob <- CreateSeuratObject(counts = pbmc@assays$RNA@counts, project = eac
+h)
+ob$stim <-each
+ob <- NormalizeData(ob, normalization.method = "LogNormalize", scale.fa
+ctor = 10000)
+ob <- FindVariableFeatures(ob, selection.method = "vst", nfeatures = 20
+00)
+numsap = numsap+1
+ob.list[ [each]] <- ob }
+
+
+#3. Perform integration
+# Identify anchors and integrate the datasets
+anchors <- FindIntegrationAnchors(object.list = ob.list, dims = 1:20, anc
+hor.features = 2000)
+combined <- IntegrateData(anchorset = anchors, dims = 1:20)
+
+#4. Perform an integrated analysis
+# we will perform downstream analysis on the corrected data
+# original unmodified data still resides in the 'RNA' assay
+DefaultAssay(combined) <- "integrated"
+combined <- FindVariableFeatures(combined,  selection.method = "vst",nfea
+tu res =2000)
+combined <- ScaleData(combined, features = VariableFeatures(combined) , v
+erbose = FALSE)
+combined <- RunPCA(combined, npcs = 20,verbose = FALSE)
+combined <- FindNeighbors(combined, reduction = "pca", dims = 1:20)
+combined <- FindClusters(combined, resolution = 0.6)
+combined <- RunUMAP(combined, reduction = "pca", dims = 1:20)
+
+DimPlot(combined, reduction = "umap", label = TRUE)
+DimPlot(combined, reduction = "umap", group.by = "stim")
+DimPlot(combined, reduction = "umap", split.by = "stim")
+
+#5. Identify differential expressed genes
+DefaultAssay(combined) <- "RNA"
+combined.markers <- FindAllMarkers(combined, only.pos = TRUE, min.pct =
+0.25, logfc.threshold = 0.25)
+top_markers <- combined.markers %>% group_by(cluster) %>% top_n(4, avg_lo
+g2FC)
+
+#6. Visualizing marker expression
+VlnPlot(combined, features = c("CD3D", "MS4A1"), split.by = "stim", pt.si
+ze = 0, combine = FALSE)
+
+
+FeaturePlot(combined, features = c("LYZ", "PPBP"), reduction = "umap", sp
+lit.by = "stim" )
+top_markers_1 <- combined.markers %>% group_by(cluster) %>% top_n(1, avg_
+log2FC)
+DotPlot(combined, features = top_markers_1$gene, cols = c("blue", "re
+d"), dot.scale = 8, split.by = "stim") +
+RotatedAxis()
+top_markers <- combined.markers %>% group_by(cluster) %>% top_n(4, avg_lo
+g2FC)
+combined <-ScaleData(combined, features = top_markers$gene)
+DoHeatmap(object = combined, features = top_markers$gene)
+#save data
+saveRDS(combined, file = "pbmc3k_pbmc1k.rds")
+
+#Perform an Harmony integrated analysis
+# From QC.rds of every sample
+
+ob.list <-
+compare <- samples <- numsap = 1
+
+
+
+list()
+"pbmc3k,pbmc1k"
+strsplit(compare, ',')[ [1]]
+
+for (each in samples){
+pbmc <- readRDS(paste0(each,'.rds'))
+colnames(pbmc@assays$RNA@counts) <- str_replace_all(colnames(pbmc@assay
+s$RNA@counts), '-1', paste0('-', numsap))
+ob <- CreateSeuratObject(counts = pbmc@assays$RNA@counts, project = eac
+h, min.cells = 3)
+ob$stim <-each
+ob <- NormalizeData(ob) numsap = numsap + 1
+ob.list[ [each]] <- ob
+}
+
+seuratObj = merge(x=ob.list[ [1]], y=ob.list[ [2]]) #seuratObj = merge(x=seurat.obj, y=ob.list[ [3]])
+seuratObj <- FindVariableFeatures(seuratObj,  selection.method = "vst", n
+features = 2000)
+seuratObj <- ScaleData(seuratObj)
+
+seuratObj <- RunPCA(seuratObj, npcs = 20)
+library(harmony)
+seuratObj <- RunHarmony(seuratObj, "stim", plot_convergence = TRUE)
+seuratObj <- FindNeighbors(seuratObj, reduction = "harmony", dims = 1:20)
+seuratObj <- FindClusters(seuratObj, resolution = 0.6)
+seuratObj <- RunUMAP(seuratObj, reduction = "harmony", dims = 1:20)
+DimPlot(seuratObj, reduction = "umap", label = TRUE)
+DimPlot(seuratObj, reduction = "umap", group.by = "stim")
+
+#Perform an Merge analysis
+seuratObj <- RunPCA(seuratObj, npcs = 20)
+seuratObj <- RunUMAP(seuratObj, reduction = "pca", dims = 1:20)
+seuratObj <- FindNeighbors(seuratObj, reduction = "pca", dims = 1:20)
+seuratObj <- FindClusters(seuratObj, resolution = 0.6)
+DimPlot(seuratObj, reduction = "umap", label = TRUE)
+DimPlot(seuratObj, reduction = "umap", group.by = "stim")
