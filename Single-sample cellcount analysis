@@ -1,0 +1,12 @@
+cd path/CellRanger
+
+ path/cellranger-8.0.1/cellranger count --id=pbmc_1k \
+--transcriptome=refdata-gex-GRCh38-2020-A \
+--fastqs=pbmc_1k_v3_fastqs \
+--sample=pbmc_1k-1,pbmc_1k-2 \
+--create-bam=false \
+--localcores=100 \
+--localmem=30
+--transcriptome # Path to reference genome
+--fastqs # The path where the original data is stored
+--force-cells=8000  # This parameter is not added by default
