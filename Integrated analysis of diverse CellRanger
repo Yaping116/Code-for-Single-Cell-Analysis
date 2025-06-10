@@ -1,0 +1,12 @@
+cd  path/CellRanger
+
+ path/cellranger-8.0.1/cellrange r aggr \
+--id=pbmc_1kvspbmc_2k \
+--csv=Sample1vsSample2_lib.csv \
+--normalize=mapped \
+--localmem=100 \
+--localcores=30
+cat Sample1vsSample2_lib.csv  # Prepare this document
+sample_id,molecule_h5
+pbmc_1k,path/CellRanger/pbmc_1k/outs/molecule_info.h5
+pbmc_2k,path/CellRanger/pbmc_2k/outs/molecule_info.h5
